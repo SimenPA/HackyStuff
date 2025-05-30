@@ -1,3 +1,35 @@
+# Alias for setting value from a password set in "pass" ubuntu application to an env variable.
+# First install pass
+# Then create gpg key
+# Then init pass with gpg-key-id
+# Then insert secret using "pass insert secret_name" followed by the secret.
+# set_pw_env secret_name sets env variable "secret_name" to value in pass secret "secret_name"
+# set_pw_env secret_name env_name set env variable "env_name" to value in pass secret "secret_name"
+set_pw_env() {
+    if [ $# -eq 1 ]; then
+        # If only one argument is specified, use it as both pass entry and variable name
+        local pass_entry="$1"
+        local env_var="$1"
+    elif [ $# -eq 2 ]; then
+        # If two arguments are specified, use the first as pass entry and the second as variable name
+        local pass_entry="$1"
+        local env_var="$2"
+    else
+        echo "Usage: set_pw <pass_entry> [env_var]"
+        return 1
+    fi
+    # Load the password using pass
+    local password
+    password=$(pass "$pass_entry" 2>/dev/null)
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to load password for '$pass_entry'."
+        return 1
+    fi
+    # Export the password as an environment variable
+    export "$env_var=$password"
+    echo "Password for '$pass_entry' loaded into environment variable '$env_var'."
+}
+
 This alias automatically creates a poetry virtualenv if it detects a poetry project by detecting a "pyproject.toml"
 
 cd() {
