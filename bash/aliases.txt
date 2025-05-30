@@ -1,0 +1,83 @@
+This alias automatically creates a poetry virtualenv if it detects a poetry project by detecting a "pyproject.toml"
+
+cd() {
+  # Change directory using the builtin command
+  builtin cd "$@" || return
+
+  # Check if pyproject.toml exists
+  if [[ -f "pyproject.toml" ]]; then
+    echo "pyproject.toml detected! Attempting to activate Poetry virtualenv..."
+
+    # Get the venv path using Poetry 2
+    VENV_PATH=$(poetry env info -p 2>/dev/null)
+
+    # Activate the virtualenv if it exists and the activate script is found
+    if [[ -n "$VENV_PATH" && -f "$VENV_PATH/bin/activate" ]]; then
+      source "$VENV_PATH/bin/activate"
+      echo "Activated virtualenv at $VENV_PATH"
+    else
+      echo "No virtualenv found. Run 'poetry install' to set it up."
+    fi
+  fi
+}
+
+Alias for running a github workflow from terminal. This requires github-cli to be installed and the working tree to be clean 	and changes to be pushed.
+workflow() {
+    # Ensure one argument is provided.
+    if [ "$#" -ne 1 ]; then
+        echo "Usage: run_workflow <workflow_file_path>"
+        return 1
+    fi
+
+    INPUT="$1"
+
+    # Check if git working tree is clean.
+    if [ -n "$(git status --porcelain)" ]; then
+        echo "Error: Git working tree is not clean. Please commit or stash your changes."
+        return 1
+    fi
+
+    CURRENT_BRANCH=$(git branch --show-current)
+    if ! git rev-parse --abbrev-ref "@{u}" >/dev/null 2>&1; then
+        git branch --set-upstream-to=origin/"$CURRENT_BRANCH" "$CURRENT_BRANCH"
+    fi
+    # Update remote refs.
+    git fetch origin > /dev/null 2>&1
+
+    # Ensure an upstream tracking branch is configured.
+    if ! git rev-parse --abbrev-ref --symbolic-full-name @{u} > /dev/null 2>&1; then
+        echo "Error: No upstream tracking branch configured for the current branch."
+        return 1
+    fi
+
+    # Determine the current commit, upstream commit, and their merge base.
+    LOCAL=$(git rev-parse @)
+    UPSTREAM=$(git rev-parse @{u})
+    BASE=$(git merge-base @ @{u})
+
+    if [ "$LOCAL" != "$UPSTREAM" ]; then
+        if [ "$LOCAL" = "$BASE" ]; then
+            echo "Error: Your branch is behind its upstream. Please pull the latest changes."
+        elif [ "$UPSTREAM" = "$BASE" ]; then
+            echo "Error: Your branch is ahead of its upstream. Please push your changes."
+        else
+            echo "Error: Your branch has diverged from its upstream."
+        fi
+        return 1
+    fi
+
+    echo "Ready to run workflow '$INPUT' on branch '$CURRENT_BRANCH'."
+    read -p "Do you want to continue? (y/n): " confirmation
+    if [[ ! "$confirmation" =~ ^[Yy]$ ]]; then
+        echo "Aborted."
+        return 1
+    fi
+
+    # If all checks pass, trigger the workflow.
+    gh workflow run "$INPUT" --ref "$(git branch --show-current)"
+    sleep 5
+    gh run list --workflow="$INPUT"
+}
+
+Run this once to combine git add . and commit -m into "git ac"
+git config --global alias.ac '!git add . && git commit -m'
